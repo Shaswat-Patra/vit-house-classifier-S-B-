@@ -8,9 +8,10 @@ import seaborn as sns
 import numpy as np
 import timm
 import requests
+import gdown
 
 # ------------------- Configuration -------------------
-MODEL_PATH = "best_vit_model.pth"
+MODEL_PATH = "best_vit_model(swin+convnext).pth"
 CLASS_NAMES = ['Kutcha House', 'Pucca House']
 CONFIDENCE_THRESHOLD = 0.80
 
@@ -31,13 +32,9 @@ class EnsembleModel(torch.nn.Module):
 def load_model():
     if not os.path.exists(MODEL_PATH):
         with st.spinner("📥 Downloading model..."):
-            model_url = st.secrets["MODEL_URL"]
-            response = requests.get(model_url)
-            if response.status_code != 200:
-                st.error("❌ Failed to download model. Check the URL or file permissions.")
-                return None     
-            with open(MODEL_PATH, 'wb') as f:
-                f.write(response.content)
+            file_id = st.secrets["MODEL_FILE_ID"]  # ✅ store just the ID
+            url = f"https://drive.google.com/uc?id={file_id}"
+            gdown.download(url, MODEL_PATH, quiet=False)
 
     checkpoint = torch.load(MODEL_PATH, map_location=torch.device('cpu'), weights_only=False)
 
