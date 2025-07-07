@@ -36,7 +36,7 @@ def load_model():
             with open(MODEL_PATH, 'wb') as f:
                 f.write(response.content)
 
-    checkpoint = torch.load(MODEL_PATH, map_location=torch.device('cpu'))
+    checkpoint = torch.load(MODEL_PATH, map_location=torch.device('cpu'), weights_only=False)
 
     # Initialize models
     swin = timm.create_model('swin_base_patch4_window7_224', pretrained=False, num_classes=len(CLASS_NAMES))
