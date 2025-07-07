@@ -33,6 +33,9 @@ def load_model():
         with st.spinner("📥 Downloading model..."):
             model_url = st.secrets["MODEL_URL"]
             response = requests.get(model_url)
+            if response.status_code != 200:
+                st.error("❌ Failed to download model. Check the URL or file permissions.")
+                return None     
             with open(MODEL_PATH, 'wb') as f:
                 f.write(response.content)
 
