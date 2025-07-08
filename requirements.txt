@@ -5,4 +5,4 @@ torchvision
 Pillow
 matplotlib
 seaborn
-gdown
+gradio
