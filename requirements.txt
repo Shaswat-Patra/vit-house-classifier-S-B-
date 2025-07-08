@@ -6,4 +6,3 @@ Pillow
 matplotlib
 seaborn
 gradio
-gdown
