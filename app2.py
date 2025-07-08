@@ -1,4 +1,4 @@
-import streamlit as st
+import gradio as gr
 import torch
 import torchvision.transforms as transforms
 from PIL import Image
@@ -27,14 +27,14 @@ class EnsembleModel(torch.nn.Module):
         return (out1 + out2) / 2  # Averaged output
 
 # ------------------- Download and Load Ensemble -------------------
-@st.cache_resource
 def load_model():
     if not os.path.exists(MODEL_PATH):
-        with st.spinner("📥 Downloading model..."):
-            model_url = st.secrets["MODEL_URL"]
-            response = requests.get(model_url)
-            with open(MODEL_PATH, 'wb') as f:
-                f.write(response.content)
+        model_url = os.environ.get("MODEL_URL")
+        response = requests.get(model_url)
+        if response.status_code != 200:
+            raise RuntimeError("❌ Failed to download model. Check permissions or URL.")
+        with open(MODEL_PATH, 'wb') as f:
+            f.write(response.content)
 
     checkpoint = torch.load(MODEL_PATH, map_location=torch.device('cpu'))
 
@@ -46,10 +46,10 @@ def load_model():
     swin.load_state_dict(checkpoint['swin_state_dict'])
     convnext.load_state_dict(checkpoint['convnext_state_dict'])
 
-    # Create ensemble
     model = EnsembleModel(swin, convnext)
     model.eval()
     return model
+
 
 # ------------------- Preprocessing -------------------
 def preprocess_image(image):
@@ -72,50 +72,62 @@ def predict(model, image_tensor):
             return "❌ Cannot detect class. Please upload a valid full house photo.", probs
         return CLASS_NAMES[predicted_idx], probs
 
-# ------------------- Streamlit UI -------------------
-st.set_page_config(page_title="🏠 House Type Classifier", layout="centered")
-
-st.title("🏠 House Type Classifier")
-st.caption("Identify whether a house is **Kutcha** or **Pucca** from uploaded images using an ensemble deep learning model.")
-
-# Sidebar
-with st.sidebar:
-    st.header("📘 About")
-    st.markdown("""
-    This AI model classifies house images into two categories:
-    - Kutcha House
-    - Pucca House
-
-    It uses an **ensemble** of Swin Transformer and ConvNeXt models for robust prediction.
-    """)
-    st.header("👤 Developer")
-    st.markdown("""
-    **Name:** Shaswat Patra  
-    **Email:** patrarishu@gmail.com
-    """)
-
-# Load model
+# -------------- Gradio Interface Function --------------
 model = load_model()
 
-# Upload instruction
-st.warning("⚠️ This model is trained only on house images. Irrelevant or out-of-context images may still be classified as 'Kutcha' or 'Pucca' incorrectly. Please upload only valid clear full house images for accurate results.")
+def classify_house(image):
+    image = image.convert("RGB")
+    input_tensor = preprocess_image(image)
+    label, probs = predict(model, input_tensor)
+    if "Cannot detect" in label:
+        return label
+    confidence = np.max(probs) * 100
+    return f"🏷️ Predicted Class: {label} | 📊 Confidence: {confidence:.1f}%"
 
-# Upload
-uploaded_files = st.file_uploader("Upload house image(s)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
 
-if uploaded_files:
-    for uploaded_file in uploaded_files:
-        st.divider()
-        st.info(f"📷 Processing: `{uploaded_file.name}`")
-        image = Image.open(uploaded_file).convert("RGB")
-        st.image(image, caption="Uploaded Image", use_container_width=True)
+# ------------------- Gradio UI -------------------
+import gradio as gr
 
-        with st.spinner("🔍 Predicting..."):
-            input_tensor = preprocess_image(image)
-            label, probs = predict(model, input_tensor)
+model = load_model()
+
+def classify_images(images):
+    results = []
+    for img in images:
+        img = img.convert("RGB")
+        tensor = preprocess_image(img)
+        label, probs = predict(model, tensor)
 
         if "Cannot detect" in label:
-            st.warning(label)
+            results.append((img, label))
         else:
             confidence = np.max(probs) * 100
-            st.success(f"🏷️ Predicted Class: **{label}**  \n📊 Confidence: **{confidence:.1f}%**")
+            results.append((img, f"🏷️ {label} | 📊 Confidence: {confidence:.1f}%"))
+    return results
+
+with gr.Blocks() as demo:
+    gr.Markdown("# 🏠 House Type Classifier")
+    gr.Markdown("Identify whether a house is **Kutcha** or **Pucca** using an **ensemble of Swin Transformer and ConvNeXt** models.")
+    
+    with gr.Row():
+        with gr.Column():
+            image_input = gr.Image(type="pil", label="Upload House Image(s)", tool=None, image_mode='RGB', sources="upload", multiple=True)
+            submit_btn = gr.Button("🔍 Predict")
+        with gr.Column():
+            output_gallery = gr.Gallery(label="📸 Results").style(grid=[1], height="auto")
+
+    submit_btn.click(fn=classify_images, inputs=image_input, outputs=output_gallery)
+
+    gr.Markdown("""
+    ### 📘 About  
+    This model classifies house images into two categories:  
+    - **Kutcha House**  
+    - **Pucca House**  
+    Built with a deep learning ensemble for more robust predictions.
+
+    ### 👤 Developer  
+    **Name:** Shaswat Patra  
+    **Email:** patrarishu@gmail.com  
+    """)
+
+if __name__ == "__main__":
+    demo.launch()
