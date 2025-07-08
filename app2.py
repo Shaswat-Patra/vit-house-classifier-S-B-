@@ -29,10 +29,12 @@ class EnsembleModel(torch.nn.Module):
 # ------------------- Download and Load Ensemble -------------------
 def load_model():
     if not os.path.exists(MODEL_PATH):
-        model_url = "https://drive.google.com/uc?id=1bIIXdnnYIPRVzG28XEYwNGLuReFPZf0L"
-        import gdown
-        gdown.download(model_url, MODEL_PATH, quiet=False)
-
+        model_url = os.environ.get("MODEL_URL")
+        response = requests.get(model_url)
+        if response.status_code != 200:
+            raise RuntimeError("❌ Failed to download model. Check permissions or URL.")
+        with open(MODEL_PATH, 'wb') as f:
+            f.write(response.content)
 
     checkpoint = torch.load(MODEL_PATH, map_location=torch.device('cpu'))
 
@@ -47,6 +49,7 @@ def load_model():
     model = EnsembleModel(swin, convnext)
     model.eval()
     return model
+
 
 
 # ------------------- Preprocessing -------------------
